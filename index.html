@@ -35,6 +35,7 @@
   .item-header {
     display: flex;
     gap: 16px;
+    flex-wrap: wrap;
   }
   .thumb-wrapper {
     flex: 0 0 180px;
@@ -46,6 +47,7 @@
   }
   .item-main {
     flex: 1;
+    min-width: 220px;
   }
   .item-title {
     font-size: 18px;
@@ -118,18 +120,9 @@
 // Your MRSS feed URL:
 const MRSS_URL = "https://d2fwyiosgzln2d.cloudfront.net/superannuation.mrss";
 
-/*
-  If your feed cannot be fetched directly in the browser due to CORS,
-  you can route it via a proxy you control.
-
-  Example (if you later add a proxy):
-  const PROXY_BASE = "https://your-proxy.example.com/?url=";
-  const USE_PROXY = true;
-
-  For now we'll assume direct fetch:
-*/
-const PROXY_BASE = "";
-const USE_PROXY = false;
+// Use a public CORS proxy so the browser can fetch the MRSS XML.
+// If this ever stops working, the error message on the page will say "Failed to fetch".
+const FETCH_URL = "https://corsproxy.io/?" + encodeURIComponent(MRSS_URL);
 
 // ----------------
 
@@ -159,13 +152,13 @@ function parseAndRender(xmlText) {
   }
 
   items.forEach(item => {
-    const title = getText(item, "title") || "No title";
-    const link  = getText(item, "link");
-    const desc  = getText(item, "description");
+    const title   = getText(item, "title") || "No title";
+    const link    = getText(item, "link");
+    const desc    = getText(item, "description");
     const pubDate = getText(item, "pubDate");
-    const guid  = getText(item, "guid");
+    const guid    = getText(item, "guid");
 
-    // thumbnail
+    // Thumbnail
     const mediaThumb = item.querySelector("media\\:thumbnail, thumbnail");
     const thumbUrl   = mediaThumb ? mediaThumb.getAttribute("url") : "";
 
@@ -173,13 +166,17 @@ function parseAndRender(xmlText) {
     const mediaKeywordsEl = item.querySelector("media\\:keywords");
     let keywords = [];
     if (mediaKeywordsEl && mediaKeywordsEl.textContent) {
-      // often comma-separated
-      keywords = mediaKeywordsEl.textContent.split(",").map(k => k.trim()).filter(Boolean);
+      keywords = mediaKeywordsEl.textContent
+        .split(",")
+        .map(k => k.trim())
+        .filter(Boolean);
     }
 
     // media:category (can be multiple)
     const mediaCategoryEls = item.querySelectorAll("media\\:category");
-    const categories = Array.from(mediaCategoryEls).map(c => c.textContent.trim()).filter(Boolean);
+    const categories = Array.from(mediaCategoryEls)
+      .map(c => c.textContent.trim())
+      .filter(Boolean);
 
     // media:content entries
     const mediaContents = item.querySelectorAll("media\\:content");
@@ -335,15 +332,8 @@ function parseAndRender(xmlText) {
 
 async function loadFeed() {
   try {
-    let fetchUrl = MRSS_URL;
-    if (USE_PROXY && PROXY_BASE) {
-      fetchUrl = PROXY_BASE + encodeURIComponent(MRSS_URL);
-      statusEl.textContent = "Loading MRSS via proxy…";
-    } else {
-      statusEl.textContent = "Loading MRSS directly…";
-    }
-
-    const res = await fetch(fetchUrl);
+    statusEl.textContent = "Loading MRSS via proxy…";
+    const res = await fetch(FETCH_URL);
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
