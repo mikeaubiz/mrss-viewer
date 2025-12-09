@@ -11,7 +11,13 @@
     }
     h1 {
         font-size: 22px;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
+    }
+    #status {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 15px;
+        white-space: pre-wrap;
     }
     .item {
         background: white;
@@ -37,64 +43,86 @@
 <body>
 
 <h1>MRSS Feed (Title + Image Only)</h1>
-
-<div id="feed">Loading…</div>
+<div id="status">Loading…</div>
+<div id="feed"></div>
 
 <script>
 const MRSS_URL = "https://d2fwyiosgzln2d.cloudfront.net/superannuation.mrss";
 
-// Use a simple public CORS proxy so the browser can fetch the MRSS feed
-const PROXY_URL = "https://api.allorigins.win/raw?url=" + encodeURIComponent(MRSS_URL);
+const statusEl = document.getElementById("status");
+const feedEl = document.getElementById("feed");
 
-fetch(PROXY_URL)
-  .then(response => {
-    if (!response.ok) {
-      throw new Error("Network response was not ok");
+// Try multiple ways of fetching the feed (direct + proxies)
+const sources = [
+  { name: "direct", url: MRSS_URL },
+  { name: "allorigins", url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(MRSS_URL) },
+  { name: "codetabs", url: "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(MRSS_URL) }
+];
+
+function parseAndRender(xmlText) {
+  const data = new window.DOMParser().parseFromString(xmlText, "application/xml");
+  const items = data.querySelectorAll("item");
+  feedEl.innerHTML = "";
+  statusEl.textContent = "";
+
+  if (!items.length) {
+    statusEl.textContent = "No items found in MRSS feed.";
+    return;
+  }
+
+  items.forEach(item => {
+    const title = item.querySelector("title")?.textContent ?? "No title";
+
+    // Common Media RSS tags
+    const mediaThumb = item.querySelector("media\\:thumbnail, thumbnail");
+    const mediaContent = item.querySelector("media\\:content, content");
+
+    let imgUrl = mediaThumb?.getAttribute("url") || mediaContent?.getAttribute("url") || null;
+
+    const card = document.createElement("div");
+    card.className = "item";
+
+    if (imgUrl) {
+      const img = document.createElement("img");
+      img.src = imgUrl;
+      img.loading = "lazy";
+      card.appendChild(img);
     }
-    return response.text();
-  })
-  .then(str => (new window.DOMParser()).parseFromString(str, "application/xml"))
-  .then(data => {
-    const items = data.querySelectorAll("item");
-    const container = document.getElementById("feed");
-    container.innerHTML = ""; // clear "Loading…"
 
-    if (!items.length) {
-      container.innerHTML = "<p>No items found in MRSS feed.</p>";
-      return;
-    }
+    const h = document.createElement("h3");
+    h.textContent = title;
+    card.appendChild(h);
 
-    items.forEach(item => {
-      const title = item.querySelector("title")?.textContent ?? "No title";
+    feedEl.appendChild(card);
+  });
+}
 
-      // Try common Media RSS thumbnail/content tags
-      const mediaThumb = item.querySelector("media\\:thumbnail, thumbnail");
-      const mediaContent = item.querySelector("media\\:content, content");
+async function tryFetch() {
+  let lastError = null;
 
-      let imgUrl = mediaThumb?.getAttribute("url") || mediaContent?.getAttribute("url") || null;
+  for (const src of sources) {
+    try {
+      statusEl.textContent = `Trying source: ${src.name}…`;
+      const res = await fetch(src.url);
 
-      const card = document.createElement("div");
-      card.className = "item";
-
-      if (imgUrl) {
-        const img = document.createElement("img");
-        img.src = imgUrl;
-        img.loading = "lazy";
-        card.appendChild(img);
+      if (!res.ok) {
+        throw new Error(`${src.name} responded with status ${res.status}`);
       }
 
-      const h = document.createElement("h3");
-      h.textContent = title;
-      card.appendChild(h);
+      const text = await res.text();
+      parseAndRender(text);
+      statusEl.textContent = `Loaded via: ${src.name}`;
+      return;
+    } catch (err) {
+      console.error(`Error via ${src.name}:`, err);
+      lastError = err;
+    }
+  }
 
-      container.appendChild(card);
-    });
-  })
-  .catch(err => {
-    const container = document.getElementById("feed");
-    container.innerHTML = "<p>Error loading MRSS feed.</p>";
-    console.error("MRSS load error:", err);
-  });
+  statusEl.textContent = "Error loading MRSS feed.\n\nLast error: " + (lastError?.message || lastError);
+}
+
+tryFetch();
 </script>
 
 </body>
