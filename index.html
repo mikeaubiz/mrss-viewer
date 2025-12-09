@@ -9,6 +9,10 @@
         background: #f7f7f7;
         padding: 20px;
     }
+    h1 {
+        font-size: 22px;
+        margin-bottom: 20px;
+    }
     .item {
         background: white;
         padding: 15px;
@@ -21,6 +25,7 @@
         max-width: 100%;
         border-radius: 6px;
         margin-bottom: 10px;
+        display: block;
     }
     h3 {
         margin: 0;
@@ -33,23 +38,40 @@
 
 <h1>MRSS Feed (Title + Image Only)</h1>
 
-<div id="feed"></div>
+<div id="feed">Loading…</div>
 
 <script>
 const MRSS_URL = "https://d2fwyiosgzln2d.cloudfront.net/superannuation.mrss";
 
-fetch(MRSS_URL)
-  .then(response => response.text())
+// Use a simple public CORS proxy so the browser can fetch the MRSS feed
+const PROXY_URL = "https://api.allorigins.win/raw?url=" + encodeURIComponent(MRSS_URL);
+
+fetch(PROXY_URL)
+  .then(response => {
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
+    }
+    return response.text();
+  })
   .then(str => (new window.DOMParser()).parseFromString(str, "application/xml"))
   .then(data => {
     const items = data.querySelectorAll("item");
     const container = document.getElementById("feed");
+    container.innerHTML = ""; // clear "Loading…"
+
+    if (!items.length) {
+      container.innerHTML = "<p>No items found in MRSS feed.</p>";
+      return;
+    }
 
     items.forEach(item => {
       const title = item.querySelector("title")?.textContent ?? "No title";
-      const media = item.querySelector("media\\:thumbnail, thumbnail, media\\:content");
 
-      const imgUrl = media?.getAttribute("url");
+      // Try common Media RSS thumbnail/content tags
+      const mediaThumb = item.querySelector("media\\:thumbnail, thumbnail");
+      const mediaContent = item.querySelector("media\\:content, content");
+
+      let imgUrl = mediaThumb?.getAttribute("url") || mediaContent?.getAttribute("url") || null;
 
       const card = document.createElement("div");
       card.className = "item";
@@ -57,6 +79,7 @@ fetch(MRSS_URL)
       if (imgUrl) {
         const img = document.createElement("img");
         img.src = imgUrl;
+        img.loading = "lazy";
         card.appendChild(img);
       }
 
@@ -68,8 +91,9 @@ fetch(MRSS_URL)
     });
   })
   .catch(err => {
-    document.getElementById("feed").innerHTML = "<p>Error loading MRSS feed.</p>";
-    console.error(err);
+    const container = document.getElementById("feed");
+    container.innerHTML = "<p>Error loading MRSS feed.</p>";
+    console.error("MRSS load error:", err);
   });
 </script>
 
