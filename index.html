@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MRSS Viewer</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f7f7f7;
+        padding: 20px;
+    }
+    .item {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        max-width: 600px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    img {
+        max-width: 100%;
+        border-radius: 6px;
+        margin-bottom: 10px;
+    }
+    h3 {
+        margin: 0;
+        font-size: 18px;
+        color: #333;
+    }
+</style>
+</head>
+<body>
+
+<h1>MRSS Feed (Title + Image Only)</h1>
+
+<div id="feed"></div>
+
+<script>
+const MRSS_URL = "https://d2fwyiosgzln2d.cloudfront.net/superannuation.mrss";
+
+fetch(MRSS_URL)
+  .then(response => response.text())
+  .then(str => (new window.DOMParser()).parseFromString(str, "application/xml"))
+  .then(data => {
+    const items = data.querySelectorAll("item");
+    const container = document.getElementById("feed");
+
+    items.forEach(item => {
+      const title = item.querySelector("title")?.textContent ?? "No title";
+      const media = item.querySelector("media\\:thumbnail, thumbnail, media\\:content");
+
+      const imgUrl = media?.getAttribute("url");
+
+      const card = document.createElement("div");
+      card.className = "item";
+
+      if (imgUrl) {
+        const img = document.createElement("img");
+        img.src = imgUrl;
+        card.appendChild(img);
+      }
+
+      const h = document.createElement("h3");
+      h.textContent = title;
+      card.appendChild(h);
+
+      container.appendChild(card);
+    });
+  })
+  .catch(err => {
+    document.getElementById("feed").innerHTML = "<p>Error loading MRSS feed.</p>";
+    console.error(err);
+  });
+</script>
+
+</body>
+</html>
