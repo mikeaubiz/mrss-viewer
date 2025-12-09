@@ -2,127 +2,361 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MRSS Viewer</title>
+<title>MRSS Viewer – Full Item Details</title>
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        background: #f7f7f7;
-        padding: 20px;
-    }
-    h1 {
-        font-size: 22px;
-        margin-bottom: 10px;
-    }
-    #status {
-        font-size: 14px;
-        color: #666;
-        margin-bottom: 15px;
-        white-space: pre-wrap;
-    }
-    .item {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        max-width: 600px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    img {
-        max-width: 100%;
-        border-radius: 6px;
-        margin-bottom: 10px;
-        display: block;
-    }
-    h3 {
-        margin: 0;
-        font-size: 18px;
-        color: #333;
-    }
+  body {
+    font-family: Arial, sans-serif;
+    background: #f7f7f7;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 5px;
+  }
+  #feedTitle {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 20px;
+  }
+  #status {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 15px;
+    white-space: pre-wrap;
+  }
+  .item {
+    background: #ffffff;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .item-header {
+    display: flex;
+    gap: 16px;
+  }
+  .thumb-wrapper {
+    flex: 0 0 180px;
+  }
+  .thumb-wrapper img {
+    max-width: 180px;
+    border-radius: 6px;
+    display: block;
+  }
+  .item-main {
+    flex: 1;
+  }
+  .item-title {
+    font-size: 18px;
+    margin: 0 0 4px;
+  }
+  .item-title a {
+    text-decoration: none;
+    color: #222;
+  }
+  .item-title a:hover {
+    text-decoration: underline;
+  }
+  .meta-row {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 4px;
+  }
+  .label {
+    font-weight: bold;
+  }
+  .description {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #333;
+  }
+  .chips {
+    margin-top: 8px;
+  }
+  .chip {
+    display: inline-block;
+    background: #eef2ff;
+    color: #334155;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 12px;
+    margin-right: 6px;
+    margin-bottom: 4px;
+  }
+  .section-title {
+    margin-top: 12px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #444;
+  }
+  .content-list {
+    font-size: 13px;
+    margin: 4px 0 0 0;
+    padding-left: 16px;
+  }
+  .content-list li {
+    margin-bottom: 4px;
+    word-break: break-all;
+  }
+  .link {
+    font-size: 13px;
+    word-break: break-all;
+  }
 </style>
 </head>
 <body>
 
-<h1>MRSS Feed (Title + Image Only)</h1>
+<h1>MRSS Viewer</h1>
+<div id="feedTitle"></div>
 <div id="status">Loading…</div>
 <div id="feed"></div>
 
 <script>
+// ---- CONFIG ----
+
+// Your MRSS feed URL:
 const MRSS_URL = "https://d2fwyiosgzln2d.cloudfront.net/superannuation.mrss";
 
-const statusEl = document.getElementById("status");
-const feedEl = document.getElementById("feed");
+/*
+  If your feed cannot be fetched directly in the browser due to CORS,
+  you can route it via a proxy you control.
 
-// Try multiple ways of fetching the feed (direct + proxies)
-const sources = [
-  { name: "direct", url: MRSS_URL },
-  { name: "allorigins", url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(MRSS_URL) },
-  { name: "codetabs", url: "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(MRSS_URL) }
-];
+  Example (if you later add a proxy):
+  const PROXY_BASE = "https://your-proxy.example.com/?url=";
+  const USE_PROXY = true;
+
+  For now we'll assume direct fetch:
+*/
+const PROXY_BASE = "";
+const USE_PROXY = false;
+
+// ----------------
+
+const statusEl = document.getElementById("status");
+const feedEl   = document.getElementById("feed");
+const feedTitleEl = document.getElementById("feedTitle");
+
+function getText(parent, selector) {
+  const el = parent.querySelector(selector);
+  return el ? el.textContent.trim() : "";
+}
 
 function parseAndRender(xmlText) {
-  const data = new window.DOMParser().parseFromString(xmlText, "application/xml");
-  const items = data.querySelectorAll("item");
+  const doc = new window.DOMParser().parseFromString(xmlText, "application/xml");
+
+  // Feed title (channel > title)
+  const channelTitle = getText(doc, "channel > title");
+  feedTitleEl.textContent = channelTitle ? `Feed title: ${channelTitle}` : "";
+
+  const items = doc.querySelectorAll("item");
   feedEl.innerHTML = "";
   statusEl.textContent = "";
 
   if (!items.length) {
-    statusEl.textContent = "No items found in MRSS feed.";
+    statusEl.textContent = "No <item> elements found in MRSS feed.";
     return;
   }
 
   items.forEach(item => {
-    const title = item.querySelector("title")?.textContent ?? "No title";
+    const title = getText(item, "title") || "No title";
+    const link  = getText(item, "link");
+    const desc  = getText(item, "description");
+    const pubDate = getText(item, "pubDate");
+    const guid  = getText(item, "guid");
 
-    // Common Media RSS tags
+    // thumbnail
     const mediaThumb = item.querySelector("media\\:thumbnail, thumbnail");
-    const mediaContent = item.querySelector("media\\:content, content");
+    const thumbUrl   = mediaThumb ? mediaThumb.getAttribute("url") : "";
 
-    let imgUrl = mediaThumb?.getAttribute("url") || mediaContent?.getAttribute("url") || null;
+    // media:keywords
+    const mediaKeywordsEl = item.querySelector("media\\:keywords");
+    let keywords = [];
+    if (mediaKeywordsEl && mediaKeywordsEl.textContent) {
+      // often comma-separated
+      keywords = mediaKeywordsEl.textContent.split(",").map(k => k.trim()).filter(Boolean);
+    }
 
+    // media:category (can be multiple)
+    const mediaCategoryEls = item.querySelectorAll("media\\:category");
+    const categories = Array.from(mediaCategoryEls).map(c => c.textContent.trim()).filter(Boolean);
+
+    // media:content entries
+    const mediaContents = item.querySelectorAll("media\\:content");
+
+    // Build card
     const card = document.createElement("div");
     card.className = "item";
 
-    if (imgUrl) {
+    const header = document.createElement("div");
+    header.className = "item-header";
+
+    // Thumbnail column
+    if (thumbUrl) {
+      const thumbWrap = document.createElement("div");
+      thumbWrap.className = "thumb-wrapper";
+
       const img = document.createElement("img");
-      img.src = imgUrl;
+      img.src = thumbUrl;
       img.loading = "lazy";
-      card.appendChild(img);
+      thumbWrap.appendChild(img);
+      header.appendChild(thumbWrap);
     }
 
-    const h = document.createElement("h3");
-    h.textContent = title;
-    card.appendChild(h);
+    // Main column
+    const main = document.createElement("div");
+    main.className = "item-main";
 
+    const titleEl = document.createElement("h2");
+    titleEl.className = "item-title";
+
+    if (link) {
+      const a = document.createElement("a");
+      a.href = link;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = title;
+      titleEl.appendChild(a);
+    } else {
+      titleEl.textContent = title;
+    }
+    main.appendChild(titleEl);
+
+    if (link) {
+      const linkRow = document.createElement("div");
+      linkRow.className = "meta-row";
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = "Link: ";
+      linkRow.appendChild(label);
+
+      const linkEl = document.createElement("a");
+      linkEl.href = link;
+      linkEl.target = "_blank";
+      linkEl.rel = "noopener noreferrer";
+      linkEl.textContent = link;
+      linkEl.className = "link";
+
+      linkRow.appendChild(linkEl);
+      main.appendChild(linkRow);
+    }
+
+    if (pubDate) {
+      const dateRow = document.createElement("div");
+      dateRow.className = "meta-row";
+      dateRow.innerHTML = `<span class="label">pubDate:</span> ${pubDate}`;
+      main.appendChild(dateRow);
+    }
+
+    if (guid) {
+      const guidRow = document.createElement("div");
+      guidRow.className = "meta-row";
+      guidRow.innerHTML = `<span class="label">guid:</span> ${guid}`;
+      main.appendChild(guidRow);
+    }
+
+    // Description
+    if (desc) {
+      const descEl = document.createElement("div");
+      descEl.className = "description";
+      descEl.innerHTML = `<span class="label">Description:</span> ${desc}`;
+      main.appendChild(descEl);
+    }
+
+    // Keywords & categories as chips
+    if (keywords.length || categories.length) {
+      const chipsWrap = document.createElement("div");
+      chipsWrap.className = "chips";
+
+      if (keywords.length) {
+        keywords.forEach(k => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = `#${k}`;
+          chipsWrap.appendChild(chip);
+        });
+      }
+
+      if (categories.length) {
+        categories.forEach(c => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = c;
+          chipsWrap.appendChild(chip);
+        });
+      }
+
+      main.appendChild(chipsWrap);
+    }
+
+    // media:content list
+    if (mediaContents.length) {
+      const sectionTitle = document.createElement("div");
+      sectionTitle.className = "section-title";
+      sectionTitle.textContent = "media:content entries:";
+      main.appendChild(sectionTitle);
+
+      const ul = document.createElement("ul");
+      ul.className = "content-list";
+
+      mediaContents.forEach(mc => {
+        const li = document.createElement("li");
+
+        const url = mc.getAttribute("url") || "";
+        const type = mc.getAttribute("type") || "";
+        const medium = mc.getAttribute("medium") || "";
+        const width = mc.getAttribute("width") || "";
+        const height = mc.getAttribute("height") || "";
+        const fileSize = mc.getAttribute("fileSize") || "";
+        const duration = mc.getAttribute("duration") || "";
+        const bitrate = mc.getAttribute("bitrate") || "";
+
+        const parts = [];
+        if (url) parts.push(`url: ${url}`);
+        if (type) parts.push(`type: ${type}`);
+        if (medium) parts.push(`medium: ${medium}`);
+        if (width || height) parts.push(`size: ${width}x${height}`);
+        if (fileSize) parts.push(`fileSize: ${fileSize}`);
+        if (duration) parts.push(`duration: ${duration}`);
+        if (bitrate) parts.push(`bitrate: ${bitrate}`);
+
+        li.textContent = parts.join(" | ");
+        ul.appendChild(li);
+      });
+
+      main.appendChild(ul);
+    }
+
+    header.appendChild(main);
+    card.appendChild(header);
     feedEl.appendChild(card);
   });
 }
 
-async function tryFetch() {
-  let lastError = null;
-
-  for (const src of sources) {
-    try {
-      statusEl.textContent = `Trying source: ${src.name}…`;
-      const res = await fetch(src.url);
-
-      if (!res.ok) {
-        throw new Error(`${src.name} responded with status ${res.status}`);
-      }
-
-      const text = await res.text();
-      parseAndRender(text);
-      statusEl.textContent = `Loaded via: ${src.name}`;
-      return;
-    } catch (err) {
-      console.error(`Error via ${src.name}:`, err);
-      lastError = err;
+async function loadFeed() {
+  try {
+    let fetchUrl = MRSS_URL;
+    if (USE_PROXY && PROXY_BASE) {
+      fetchUrl = PROXY_BASE + encodeURIComponent(MRSS_URL);
+      statusEl.textContent = "Loading MRSS via proxy…";
+    } else {
+      statusEl.textContent = "Loading MRSS directly…";
     }
-  }
 
-  statusEl.textContent = "Error loading MRSS feed.\n\nLast error: " + (lastError?.message || lastError);
+    const res = await fetch(fetchUrl);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const text = await res.text();
+    parseAndRender(text);
+    statusEl.textContent = "Loaded.";
+  } catch (err) {
+    console.error("MRSS load error:", err);
+    statusEl.textContent = "Error loading MRSS feed: " + (err.message || err);
+  }
 }
 
-tryFetch();
+loadFeed();
 </script>
 
 </body>
